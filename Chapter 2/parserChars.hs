@@ -12,6 +12,7 @@ data LispVal = Atom String
 			 | Number Integer
 			 | String String
 			 | Bool Bool
+       | Character Char
 
 parseEscapedQuote :: Parser Char
 parseEscapedQuote = do 
@@ -73,7 +74,14 @@ parseRadixNumber = do
                  return n
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom <|> parseString <|> parseNumber
+parseExpr = parseAtom <|> parseString <|> parseNumber <|> parseChar
+
+parseChar :: Parser LispVal
+parseChar = do
+          char '#'
+          char '\\'
+          c <- letter <|> digit <|> symbol
+          return $ Character c
 
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of
