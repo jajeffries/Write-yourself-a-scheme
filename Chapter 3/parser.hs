@@ -3,6 +3,8 @@ import Numeric (readHex, readOct, readFloat)
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 
+-- Parser
+
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
 
@@ -150,11 +152,7 @@ parseQuoted = do
     x <- parseExpr
     return $ List [Atom "quote", x]
 
-readExpr :: String -> String
-readExpr input = case parse parseExpr "lisp" input of
-    Left err -> "No Match:" ++ show err
-    Right val -> "Found Value" ++ show val
-
+-- show instance
 unwordsList :: [LispVal] -> String
 unwordsList vars = (unwords (map showVal vars))
 
@@ -169,7 +167,43 @@ showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tai
 
 instance Show LispVal where show = showVal
 
-main :: IO()
-main = do
-	args <- getArgs
-	putStrLn (readExpr(args !! 0))
+-- evaluate
+eval :: LispVal -> LispVal
+eval val@(String _) = val
+eval val@(Number _) = val
+eval val@(Bool _) = val
+eval (List [Atom "quote", val]) = val
+eval (List (Atom func : args)) = apply func $ map eval args
+
+numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
+numericBinop op params = Number $ foldl1 op $ map unpackNum params
+
+unpackNum :: LispVal -> Integer
+unpackNum (Number n) = n
+unpackNum (String n) = let parsed = reads n in 
+                          if null parsed 
+                            then 0
+                            else fst $ parsed !! 0
+unpackNum (List [n]) = unpackNum n
+unpackNum _ = 0
+
+primitives :: [(String, [LispVal] -> LispVal)]
+primitives = [("+", numericBinop (+)),
+              ("-", numericBinop (-)),
+              ("*", numericBinop (*)),
+              ("/", numericBinop div),
+              ("mod", numericBinop mod),
+              ("quotient", numericBinop quot),
+              ("remainder", numericBinop rem)]
+
+apply :: String -> [LispVal] -> LispVal
+apply func args = maybe (Bool False) ($ args) $ lookup func primitives
+
+-- read and main
+readExpr :: String -> LispVal
+readExpr input = case parse parseExpr "lisp" input of
+    Left err -> String $ "No match: " ++ show err
+    Right val -> val
+
+main :: IO ()
+main = getArgs >>= print . eval . readExpr . head
